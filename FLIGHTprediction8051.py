@@ -3,6 +3,7 @@ from dash import html, dcc
 from dash.dependencies import Input, Output, State
 import pandas as pd
 import joblib
+import os
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
@@ -85,4 +86,5 @@ def predict(n_clicks, airline, source_city, departure_time, stops, arrival_time,
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=8051)  # Change port if needed
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8050)))
+
