@@ -5,7 +5,7 @@ import pandas as pd
 import joblib
 
 # Load model and dataset
-model = joblib.load("flight_price_model.pkl")
+model = joblib.load("flight_price_model1.pkl")
 df = pd.read_csv("DataSet/Clean_Dataset.csv")
 
 # Start Dash app
@@ -134,7 +134,7 @@ app.layout = html.Div([
 
     html.Hr(style={'marginTop': '40px'}),
 
-    html.Div("🚀 Built by ayan14coins | Model: flight_price_model.pkl",
+    html.Div("🚀 Built by ayan14coins | Model: flight_price_model1.pkl",
              style={'textAlign': 'center', 'marginTop': 10, 'color': 'gray', 'fontSize': '13px'})
 ])
 
