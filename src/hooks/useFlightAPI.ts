@@ -3,7 +3,7 @@ import { FlightSearchData } from '@/components/FlightSearchForm';
 import { FlightResult } from '@/components/FlightResults';
 
 // API configuration - update this with your Render app URL
-const API_BASE_URL = 'https://flight-price-predictor-app.onrender.com'; // Replace with your actual Render URL
+const API_BASE_URL = 'https://flight-price-predictor-app-7jh5.onrender.com/'; // Replace with your actual Render URL
 
 // Map time to time-of-day category (same logic as your Python app)
 const mapTimeToCategory = (timeStr: string): string | null => {
