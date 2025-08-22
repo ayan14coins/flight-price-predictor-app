@@ -3,8 +3,6 @@ from dash import html, dcc
 from dash.dependencies import Input, Output, State
 import pandas as pd
 import joblib
-from flask import request, jsonify
-from flask_cors import CORS
 
 # Load model and dataset
 model = joblib.load("flight_price_model1.pkl")
@@ -29,130 +27,9 @@ def map_time_to_category(time_str):
     else:
         return "Late Night"
 
-# Extract prediction logic into a reusable function
-def predict_flight_price(airline, source_city, dep_time_str, stops, arr_time_str, 
-                        destination_city, travel_class, duration, departure_date):
-    """
-    Predict flight price and get matching flights
-    Returns: dict with predicted_price and matching_flights
-    """
-    # Validate inputs
-    if any(val is None for val in [airline, source_city, dep_time_str, stops, arr_time_str,
-                                   destination_city, travel_class, duration]):
-        raise ValueError("All fields are required")
-
-    if not departure_date:
-        raise ValueError("Please select a valid departure date")
-
-    # Map times to categories
-    dep_category = map_time_to_category(dep_time_str)
-    arr_category = map_time_to_category(arr_time_str)
-
-    if dep_category is None or arr_category is None:
-        raise ValueError("Invalid time selected")
-
-    # Calculate days left
-    days_left = (pd.to_datetime(departure_date).date() - pd.Timestamp.today().date()).days
-    if days_left < 0 or days_left > 60:
-        raise ValueError("Departure date must be within the next 60 days")
-
-    # Prepare input for model
-    user_input = pd.DataFrame({
-        'airline': [airline],
-        'source_city': [source_city],
-        'departure_time': [dep_category],
-        'stops': [stops],
-        'arrival_time': [arr_category],
-        'destination_city': [destination_city],
-        'class': [travel_class],
-        'duration': [duration],
-        'days_left': [days_left]
-    })
-
-    # Make prediction
-    predicted_price = round(model.predict(user_input)[0], 2)
-
-    # Get matching flights
-    filtered = df[
-        (df['airline'] == airline) &
-        (df['source_city'] == source_city) &
-        (df['departure_time'] == dep_category) &
-        (df['stops'] == stops) &
-        (df['arrival_time'] == arr_category) &
-        (df['destination_city'] == destination_city) &
-        (df['class'] == travel_class) &
-        (df['duration'] <= duration)
-    ]
-
-    flights_info = filtered[['airline', 'flight', 'duration']].drop_duplicates()
-    
-    # Format matching flights
-    matching_flights = []
-    for _, row in flights_info.iterrows():
-        matching_flights.append({
-            'airline': row.airline,
-            'flight': row.flight,
-            'duration': row.duration
-        })
-
-    return {
-        'predicted_price': predicted_price,
-        'matching_flights': matching_flights
-    }
-
 # Start Dash app
 app = dash.Dash(__name__)
 server = app.server
-
-# Enable CORS for API endpoints
-CORS(server)
-
-# API Routes
-@server.route('/api/options', methods=['GET'])
-def get_options():
-    """Get dropdown options for the frontend"""
-    try:
-        return jsonify({
-            'airlines': df['airline'].unique().tolist(),
-            'cities': df['source_city'].unique().tolist(),
-            'stops': df['stops'].unique().tolist(),
-            'classes': df['class'].unique().tolist()
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@server.route('/api/predict', methods=['POST'])
-def api_predict():
-    """API endpoint for flight price prediction"""
-    try:
-        data = request.get_json()
-        
-        # Extract data from request
-        airline = data.get('airline')
-        source_city = data.get('source_city')
-        dep_time_str = data.get('departure_time')
-        stops = data.get('stops')
-        arr_time_str = data.get('arrival_time')
-        destination_city = data.get('destination_city')
-        travel_class = data.get('class')
-        duration = data.get('duration')
-        days_left = data.get('days_left')
-        
-        # Create a fake departure_date based on days_left for compatibility
-        departure_date = (pd.Timestamp.today() + pd.Timedelta(days=days_left)).strftime('%Y-%m-%d')
-        
-        # Get prediction
-        result = predict_flight_price(
-            airline, source_city, dep_time_str, stops, arr_time_str,
-            destination_city, travel_class, duration, departure_date
-        )
-        
-        return jsonify(result)
-        
-    except ValueError as e:
-        return jsonify({'error': str(e)}), 400
-    except Exception as e:
-        return jsonify({'error': 'An unexpected error occurred'}), 500
 
 # Generate dropdown options for time in 24-hour format (every 30 minutes)
 time_options = [{'label': f"{h:02}:{m:02}", 'value': f"{h:02}:{m:02}"} for h in range(0, 24) for m in (0, 30)]
@@ -284,32 +161,62 @@ def predict(n_clicks, airline, source_city, dep_time_str,
     if n_clicks == 0:
         return ""
 
-    try:
-        result = predict_flight_price(
-            airline, source_city, dep_time_str, stops, arr_time_str,
-            destination_city, travel_class, duration, departure_date
-        )
-        
-        predicted_price = result['predicted_price']
-        matching_flights = result['matching_flights']
-        
-        return html.Div([
-            html.H2(f"💸 Predicted Price: ₹{predicted_price}", style={
-                'color': '#003566', 'fontWeight': 'bold', 'marginBottom': '20px', 'fontSize': '26px'
-            }),
-            html.H4("📋 Top Matching Flights:", style={
-                'color': '#212529', 'fontWeight': 'bold', 'marginBottom': '10px', 'fontSize': '20px'
-            }),
-            html.Ul([
-                html.Li(f"{flight['airline']} - Flight: {flight['flight']} - Duration: {int(flight['duration'])}hrs {int(round((flight['duration'] - int(flight['duration'])) * 60))}m", style={'fontSize': '16px'})
-                for flight in matching_flights
-            ]) if matching_flights else html.P("No matching flights found.", style={'fontSize': '16px', 'color': 'gray'})
-        ])
-        
-    except ValueError as e:
-        return f"⚠️ {str(e)}"
-    except Exception as e:
-        return "❗ An unexpected error occurred. Please try again."
+    if any(val is None for val in [airline, source_city, dep_time_str, stops, arr_time_str,
+                                   destination_city, travel_class, duration]):
+        return "⚠️ Please fill in all the fields before predicting."
+
+    if not departure_date:
+        return "❗ Please select a valid departure date."
+
+    dep_category = map_time_to_category(dep_time_str)
+    arr_category = map_time_to_category(arr_time_str)
+
+    if dep_category is None or arr_category is None:
+        return "⏰ Invalid time selected."
+
+    days_left = (pd.to_datetime(departure_date).date() - pd.Timestamp.today().date()).days
+    if days_left < 0 or days_left > 60:
+        return "❗ Departure date must be within the next 60 days."
+
+    user_input = pd.DataFrame({
+        'airline': [airline],
+        'source_city': [source_city],
+        'departure_time': [dep_category],
+        'stops': [stops],
+        'arrival_time': [arr_category],
+        'destination_city': [destination_city],
+        'class': [travel_class],
+        'duration': [duration],
+        'days_left': [days_left]
+    })
+
+    predicted_price = round(model.predict(user_input)[0], 2)
+
+    filtered = df[
+        (df['airline'] == airline) &
+        (df['source_city'] == source_city) &
+        (df['departure_time'] == dep_category) &
+        (df['stops'] == stops) &
+        (df['arrival_time'] == arr_category) &
+        (df['destination_city'] == destination_city) &
+        (df['class'] == travel_class) &
+        (df['duration'] <= duration)
+    ]
+
+    flights_info = filtered[['airline', 'flight', 'duration']].drop_duplicates()
+
+    return html.Div([
+        html.H2(f"💸 Predicted Price: ₹{predicted_price}", style={
+            'color': '#003566', 'fontWeight': 'bold', 'marginBottom': '20px', 'fontSize': '26px'
+        }),
+        html.H4("📋 Top Matching Flights:", style={
+            'color': '#212529', 'fontWeight': 'bold', 'marginBottom': '10px', 'fontSize': '20px'
+        }),
+        html.Ul([
+            html.Li(f"{row.airline} - Flight: {row.flight} - Duration: {int(row.duration)}hrs {int(round((row.duration - int(row.duration)) * 60))}m", style={'fontSize': '16px'})
+            for _, row in flights_info.iterrows()
+        ]) if not flights_info.empty else html.P("No matching flights found.", style={'fontSize': '16px', 'color': 'gray'})
+    ])
 
 
 if __name__ == '__main__':
